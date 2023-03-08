@@ -5,11 +5,10 @@ import 'package:google_mlkit_image_labeling/google_mlkit_image_labeling.dart';
 
 
 late List<CameraDescription> _cameras;
-
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   _cameras = await availableCameras();
-  runApp(MyApp());
+  runApp(const MyApp());
 }
 
 class MyApp extends StatefulWidget {
@@ -21,11 +20,10 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   // This widget is the root of your application.
-
-  late CameraController cameraController;
-
-  String result = "Results will be shown here";
-
+  late CameraController controller;
+  CameraImage? img;
+  bool isBusy = false;
+  String result = "";
   dynamic imageLabeler;
 
   @override
@@ -33,14 +31,23 @@ class _MyAppState extends State<MyApp> {
     super.initState();
     //TODO initialize Labeller
 
+
+    final ImageLabelerOptions options = ImageLabelerOptions(confidenceThreshold: 0.5);
+    imageLabeler = ImageLabeler(options: options);
+
+
     //TODO initialize the controller
     //Specifies the camera
-    cameraController = CameraController(_cameras[0], ResolutionPreset.max);
-    cameraController.initialize().then((_) {
+    controller = CameraController(_cameras[0], ResolutionPreset.max);
+    controller.initialize().then((_) {
       if (!mounted) {
         return;
       }
-      cameraController.startImageStream((image) => {});
+      controller.startImageStream((image) => {
+        if(isBusy == false){
+          img = image, doImageLabeling(),isBusy=true
+        }
+      });
       setState(() {});
     }).catchError((Object e) {
       if (e is CameraException) {
@@ -56,12 +63,21 @@ class _MyAppState extends State<MyApp> {
     });
   }
 
-  void doImageLabeling() async{
+  doImageLabeling() async {
     result = "";
     InputImage inputImg = getInputImage();
+    final List<ImageLabel> labels = await imageLabeler.processImage(inputImg);
+    for (ImageLabel label in labels) {
+      final String text = label.label;
+      final int index = label.index;
+      final double confidence = label.confidence;
+      result += "$text   ${confidence.toStringAsFixed(2)}\n";
+    }
+    setState(() {
+      result;
+      isBusy = false;
+    });
   }
-
-  CameraImage? img;
 
   //Camera related starter code
   InputImage getInputImage() {
@@ -120,7 +136,7 @@ class _MyAppState extends State<MyApp> {
       home: Stack(
         fit: StackFit.expand,
         children: [
-          CameraPreview(cameraController),
+          CameraPreview(controller),
 
           Container(
             margin: EdgeInsets.only(left: 10, bottom: 10),
